@@ -9,7 +9,7 @@ var config = {
   theme: "dark",
   use3dTerrain: false, //true for 3D maps.
   auto: false,
-  title: "River to the Sea explained in one map and two charts",
+  title: '"From the River to the Sea" explained in one map and two charts',
   subtitle: "Test map visualization for AFR",
   byline: "Article by Emma Conners, Map Visualization by Lucy King",
   footer:
