@@ -20,7 +20,7 @@ var config = {
       alignment: "left",
       hidden: false,
       description:
-        "The almost biblical ring of &ldquo;from the river to the sea&rdquo; is evocative of the Southern-Levant region it refers to. Politically, it's in the Middle East.",
+        "<p>The almost biblical ring of &ldquo;From the River to the Sea&rdquo; is evocative of the Southern-Levant region it refers to.</p><p>Politically, it's in the Middle East.</p>",
       location: {
         center: [35.18632, 25.82284],
         zoom: 3,
@@ -29,15 +29,28 @@ var config = {
       },
       mapAnimation: "flyTo",
       rotateAnimation: false,
-      //   callback: "firstHighlight",
+      callback: "firstHighlight",
       onChapterEnter: [
         {
-          callback: "hidethirdHighlight",
+          layer: "country-boundaries-1",
+          opacity: 1,
+        },
+        {
+          layer: "highlight-tur-syr-1",
+          opacity: 1,
+        },
+        {
+          callback: "firstHighlightReverse",
         },
       ],
       onChapterExit: [
         {
-          callback: "hideFirstHighlight",
+          layer: "country-boundaries-1",
+          opacity: 0,
+        },
+        {
+          layer: "highlight-tur-syr-1",
+          opacity: 0,
         },
       ],
     },
@@ -61,10 +74,20 @@ var config = {
       mapAnimation: "flyTo",
       rotateAnimation: true,
       callback: "secondHighlight",
-      onChapterEnter: [],
+      onChapterEnter: [
+        {
+          layer: "country-boundaries-1",
+          opacity: 0,
+        },
+        {
+          layer: "outline",
+          opacity: 0,
+        },
+      ],
       onChapterExit: [
         {
-          callback: "hideSecondHighlight",
+          layer: "country-boundaries-2",
+          opacity: 0,
         },
       ],
     },
@@ -83,10 +106,40 @@ var config = {
       mapAnimation: "flyTo",
       rotateAnimation: false,
       callback: "thirdHighlight",
-      onChapterEnter: [],
-      onChapterExit: [
+      onChapterEnter: [
         {
-          callback: "hidethirdHighlight",
+          layer: "firstHighlight",
+          opacity: 0,
+        },
+        {
+          layer: "water-bodies",
+          opacity: 1,
+        },
+        {
+          layer: "country-boundaries-3",
+          opacity: 0,
+        },
+        {
+          layer: "label-layer-2",
+          opacity: 0,
+        },
+        {
+          layer: "label-layer-1",
+          opacity: 1,
+        },
+      ],
+      onChapterExit: [
+        // {
+        //   layer: "river-to-sea-layer",
+        //   opacity: 1,
+        // },
+        // {
+        //   layer: "outline",
+        //   opacity: 0,
+        // },
+        {
+          layer: "labels-layer",
+          opacity: 0,
         },
       ],
     },
@@ -94,7 +147,8 @@ var config = {
       id: "fourth-chapter",
       alignment: "left",
       hidden: false,
-      description: "It's surrounded by Jordan, Lebanon, Syria and Egypt.",
+      description:
+        "The area is surrounded by Jordan, Lebanon, Syria and Egypt.",
       location: {
         center: [35.21196, 31.19424],
         zoom: 4.5,
@@ -102,10 +156,20 @@ var config = {
         bearing: 0.0,
       },
       mapAnimation: "flyTo",
-      rotateAnimation: true,
+      rotateAnimation: false,
       callback: "fourthHighlight",
-      onChapterEnter: [],
-      onChapterExit: [],
+      onChapterEnter: [
+        {
+          layer: "labels-layer-1",
+          opacity: 0,
+        },
+      ],
+      onChapterExit: [
+        {
+          layer: "country-boundaries-4",
+          opacity: 0,
+        },
+      ],
     },
   ],
 };

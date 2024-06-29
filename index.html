@@ -23,7 +23,7 @@
             font-family: "Cormorant Garamond", serif;
             font-weight: 400;
             font-style: normal;
-            font-size: 25px;
+            font-size: 15px;
         }
 
         .description-text {
@@ -34,12 +34,6 @@
             color: #000;
             /* Optional: Adjust text color */
         }
-
-        /* a,
-        a:hover,
-        a:visited {
-            color: #0071bc;
-        } */
 
         #map {
             top: 0;
@@ -182,11 +176,8 @@
     <div id="mapInset"></div>
     <div id="story"></div>
 
-    <script src="./config.js"></script>
+    <script src="config.js"></script>
     <script>
-
-
-
         var initLoad = true;
         var layerTypes = {
             'fill': ['fill-opacity'],
@@ -206,12 +197,18 @@
         }
 
         function getLayerPaintType(layer) {
-            var layerType = map.getLayer(layer).type;
+            const mapLayer = map.getLayer(layer);
+            if (!mapLayer) {
+                console.error(`Layer ${layer} does not exist`);
+                return null;
+            }
+            var layerType = mapLayer.type;
             return layerTypes[layerType];
         }
 
         function setLayerOpacity(layer) {
             var paintProps = getLayerPaintType(layer.layer);
+            if (!paintProps) return;  // If paintProps is null, return early
             paintProps.forEach(function (prop) {
                 var options = {};
                 if (layer.duration) {
@@ -353,6 +350,56 @@
         // instantiate the scrollama
         var scroller = scrollama();
 
+        scroller
+            .setup({
+                step: '.step',
+                offset: 0.5,
+                progress: true
+            })
+            .onStepEnter(response => {
+                var current_chapter = config.chapters.findIndex(chap => chap.id === response.element.id);
+                var chapter = config.chapters[current_chapter];
+
+                response.element.classList.add('active');
+                map[chapter.mapAnimation || 'flyTo'](chapter.location);
+
+                if (chapter.onChapterEnter.length > 0) {
+                    chapter.onChapterEnter.forEach(entry => {
+                        if (entry.callback) {
+                            window[entry.callback]();
+                        }
+                    });
+                }
+
+                if (chapter.rotateAnimation) {
+                    map.once('moveend', () => {
+                        const rotateNumber = map.getBearing();
+                        map.rotateTo(rotateNumber + 180, {
+                            duration: 30000, easing: function (t) {
+                                return t;
+                            }
+                        });
+                    });
+                }
+
+                if (config.auto) {
+                    var next_chapter = (current_chapter + 1) % config.chapters.length;
+                    map.once('moveend', () => {
+                        document.querySelectorAll('[data-scrollama-index="' + next_chapter.toString() + '"]')[0].scrollIntoView();
+                    });
+                }
+            })
+            .onStepExit(response => {
+                var chapter = config.chapters.find(chap => chap.id === response.element.id);
+                response.element.classList.remove('active');
+                if (chapter.onChapterExit.length > 0) {
+                    chapter.onChapterExit.forEach(exit => {
+                        if (exit.callback) {
+                            window[exit.callback]();
+                        }
+                    });
+                }
+            });
 
         map.on("load", function () {
             if (config.use3dTerrain) {
@@ -581,145 +628,206 @@
         // setup resize event
         window.addEventListener('resize', scroller.resize);
 
-        map.on('load', function () {
-            map.addLayer(
-                {
-                    id: 'country-boundaries',
-                    source: {
-                        type: 'vector',
-                        url: 'mapbox://mapbox.country-boundaries-v1',
-                    },
-                    'source-layer': 'country_boundaries',
-                    type: 'fill',
-                    paint: {
-                        'fill-color': '#1d88e5',
-                        'fill-opacity': 0.4,
-                    },
-                },
-                'country-label'
-            );
+        var firstHighlightFired = false;
 
-            map.setFilter('country-boundaries', [
+        map.once('load', function firstHighlight() {
+            if (firstHighlightFired) return;
+            firstHighlightFired = true;
+
+            // Define the list of countries to show using their ISO 3166-1 alpha-3 codes
+            const countriesToShowOne = [
+                'CYP', 'BHR', 'EGY', 'SYR', 'TUR', 'IRN', 'IRQ', 'ISR',
+                'JOR', 'KWT', 'LBN', 'OMN', 'QAT', 'SAU', 'ARE', 'PSE', 'YEM'
+            ];
+
+            const specialCountries = ['TUR', 'SYR'];
+
+            // Add the country-boundaries layer
+            map.addLayer({
+                id: 'country-boundaries-1',
+                source: {
+                    type: 'vector',
+                    url: 'mapbox://mapbox.country-boundaries-v1',
+                },
+                'source-layer': 'country_boundaries',
+                type: 'fill',
+                paint: {
+                    'fill-color': '#0f6cc9',
+                    'fill-opacity': [
+                        'match',
+                        ['get', 'iso_3166_1_alpha_3'],
+                        ...specialCountries.reduce((acc, code) => [...acc, code, 0.2], []),
+                        ...countriesToShowOne.filter(code => !specialCountries.includes(code)).reduce((acc, code) => [...acc, code, 0.4], []),
+                        0.4 // Default fill opacity for other countries
+                    ]
+                },
+            }, 'country-label');
+
+            // Apply filter to highlight specific countries
+            map.setFilter('country-boundaries-1', [
                 "in",
                 "iso_3166_1_alpha_3",
-                'CYP',
-                'BHR',
-                'EGY',
-                'SYR',
-                'TUR',
-                'IRN',
-                'IRQ',
-                'ISR',
-                'JOR',
-                'KWT',
-                'LBN',
-                'OMN',
-                'QAT',
-                'SAU',
-                'ARE',
-                'YEM'
+                ...countriesToShowOne
             ]);
         });
 
-        // function firstHighlight() {
-        //     if (map.getLayer('country-boundaries')) {
-        //         map.setFilter('country-boundaries', [
-        //             'in',
-        //             'iso_3166_1_alpha_3',
-        //             'CYP',
-        //             'BHR',
-        //             'EGY',
-        //             'SYR',
-        //             'TUR',
-        //             'IRN',
-        //             'IRQ',
-        //             'ISR',
-        //             'JOR',
-        //             'KWT',
-        //             'LBN',
-        //             'OMN',
-        //             'QAT',
-        //             'SAU',
-        //             'ARE',
-        //             'YEM'
-        //         ]);
-        //     } else {
-        //         map.addLayer(
-        //             {
-        //                 id: 'country-boundaries',
-        //                 source: {
-        //                     type: 'vector',
-        //                     url: 'mapbox://mapbox.country-boundaries-v1',
-        //                 },
-        //                 'source-layer': 'country_boundaries',
-        //                 type: 'fill',
-        //                 paint: {
-        //                     'fill-color': '#0f6cc9',
-        //                     'fill-opacity': 0.4,
-        //                 },
-        //             },
-        //             'country-label'
-        //         );
+        function firstHighlightReverse() {
+            // Define the list of countries to show using their ISO 3166-1 alpha-3 codes
+            const countriesToShowOne = [
+                'CYP', 'BHR', 'EGY', 'SYR', 'TUR', 'IRN', 'IRQ', 'ISR',
+                'JOR', 'KWT', 'LBN', 'OMN', 'QAT', 'SAU', 'ARE', 'PSE', 'YEM'
+            ];
 
-        //         map.setFilter('country-boundaries', [
-        //             'in',
-        //             'iso_3166_1_alpha_3',
-        //             'CYP',
-        //             'BHR',
-        //             'EGY',
-        //             'SYR',
-        //             'TUR',
-        //             'IRN',
-        //             'IRQ',
-        //             'ISR',
-        //             'JOR',
-        //             'KWT',
-        //             'LBN',
-        //             'OMN',
-        //             'QAT',
-        //             'SAU',
-        //             'ARE',
-        //             'YEM'
-        //         ]);
-        //     }
-        // }
+            const specialCountries = ['TUR', 'SYR'];
 
-        function hideFirstHighlight() {
-            if (map.getLayer('country-boundaries')) {
-                map.setFilter('country-boundaries', ['in', 'iso_3166_1_alpha_3', '']);
-            }
+            // Add the country-boundaries layer
+            map.addLayer({
+                id: 'country-boundaries-r',
+                source: {
+                    type: 'vector',
+                    url: 'mapbox://mapbox.country-boundaries-v1',
+                },
+                'source-layer': 'country_boundaries',
+                type: 'fill',
+                paint: {
+                    'fill-color': '#0f6cc9',
+                    'fill-opacity': [
+                        'match',
+                        ['get', 'iso_3166_1_alpha_3'],
+                        ...specialCountries.reduce((acc, code) => [...acc, code, 0.2], []),
+                        ...countriesToShowOne.filter(code => !specialCountries.includes(code)).reduce((acc, code) => [...acc, code, 0.4], []),
+                        0.4 // Default fill opacity for other countries
+                    ]
+                },
+            }, 'country-label');
+
+            // Apply filter to highlight specific countries
+            map.setFilter('country-boundaries-r', [
+                "in",
+                "iso_3166_1_alpha_3",
+                ...countriesToShowOne
+            ]);
         }
 
 
 
+
+
+        // // Load the country-boundaries source
+        // map.addSource('country-boundaries-1', {
+        //     type: 'vector',
+        //     url: 'mapbox://mapbox.country-boundaries-v1'
+        // });
+
+        // // Add the country-boundaries layer for general highlighting
+        // map.addLayer({
+        //     id: 'country-boundaries-1',
+        //     type: 'fill',
+        //     source: 'country-boundaries-1',
+        //     'source-layer': 'country_boundaries',
+        //     paint: {
+        //         'fill-color': '#1d88e5',
+        //         'fill-opacity': [
+        //             'match',
+        //             ['get', 'iso_3166_1_alpha_3'],
+        //             'TUR', 0.2, // Fill opacity for Turkey
+        //             'SYR', 0.2, // Fill opacity for Syria
+        //             0.4 // Default fill opacity for other countries
+        //         ]
+        //     }
+        // }, 'country-label');
+
+        // // Inspect features and populate uniqueCountries set
+        // map.on('sourcedata', function (e) {
+        //     if (e.sourceId === 'country-boundaries-1' && e.isSourceLoaded) {
+        //         const features = map.querySourceFeatures('country-boundaries-1', {
+        //             sourceLayer: 'country_boundaries'
+        //         });
+
+        //         const uniqueCountries = new Set();
+
+        //         features.forEach(feature => {
+        //             const isoCode = feature.properties.iso_3166_1_alpha_3;
+        //             const worldview = feature.properties.worldview;
+
+        //             // Check if the country is in the countriesToShow list and has the desired worldview
+        //             if (countriesToShowOne.includes(isoCode) && (worldview === 'all' || worldview === 'US')) {
+        //                 uniqueCountries.add(isoCode);
+        //             }
+        //         });
+
+        //         // Convert the set to an array for the filter
+        //         const uniqueCountriesArray = Array.from(uniqueCountries);
+
+        //         // Apply the filter with unique countries
+        //         map.setFilter('country-boundaries-1', [
+        //             'in',
+        //             'iso_3166_1_alpha_3',
+        //             ...uniqueCountriesArray
+        //         ]);
+
+        //         // Optionally log the unique countries for debugging
+        //         console.log('Unique countries to highlight:', uniqueCountriesArray);
+
+
+
+        // Add a separate layer specifically for Turkey and Syria to ensure proper styling
+        // map.addLayer({
+        //     id: 'highlight-tur-syr-1',
+        //     type: 'fill',
+        //     source: 'country-boundaries-1',
+        //     'source-layer': 'country_boundaries',
+        //     paint: {
+        //         'fill-color': '#1d88e5',
+        //         'fill-opacity': 0.2
+        //     },
+        //     filter: ['in', 'iso_3166_1_alpha_3', 'TUR', 'SYR']
+        // }, 'country-label');
+
+
+
+        function clearFirstHighlight() {
+            if (map.getLayer('highlight-tur-syr-1')) {
+                map.removeLayer('highlight-tur-syr-1');
+            }
+            if (map.getLayer('country-boundaries-1')) {
+                map.removeLayer('country-boundaries-1');
+                if (map.getSource('country-boundaries-1')) {
+                    map.removeSource('country-boundaries-1');
+                }
+            }
+        }
+
         function secondHighlight() {
-            if (map.getLayer('country-boundaries')) {
-                map.setFilter('country-boundaries', [
+            const countriesToShowTwo = [
+                'ARM', 'AZE', 'BHR', 'CYP', 'GEO', 'IRQ', 'ISR', 'JOR',
+                'KWT', 'LBN', 'OMN', 'PSE', 'QAT', 'SAU', 'SYR', 'TUR',
+                'ARE', 'YEM'
+            ];
+
+            const specialCountries = ['TUR', 'SYR'];
+
+            if (map.getLayer('country-boundaries-2')) {
+                // Update the filter and paint properties if the layer already exists
+                map.setFilter('country-boundaries-2', [
                     'in',
                     'iso_3166_1_alpha_3',
-                    'ARM',
-                    'AZE',
-                    'BHR',
-                    'CYP',
-                    'GEO',
-                    'IRQ',
-                    'ISR',
-                    'JOR',
-                    'KWT',
-                    'LBN',
-                    'OMN',
-                    'PSE',
-                    'QAT',
-                    'SAU',
-                    'SYR',
-                    'TUR',
-                    'ARE',
-                    'YEM'
+                    ...countriesToShowTwo
+                ]);
+
+                map.setPaintProperty('country-boundaries-2', 'fill-opacity', [
+                    'match',
+                    ['get', 'iso_3166_1_alpha_3'],
+                    'TUR', 0.2,
+                    'SYR', 0.2,
+                    ...countriesToShowTwo.filter(code => !specialCountries.includes(code)).reduce((acc, code) => [...acc, code, 0.4], []),
+                    0.4 // Default fill opacity for other countries
                 ]);
             } else {
+                // Add the layer if it doesn't exist
                 map.addLayer(
                     {
-                        id: 'country-boundaries',
+                        id: 'country-boundaries-2',
                         source: {
                             type: 'vector',
                             url: 'mapbox://mapbox.country-boundaries-v1',
@@ -728,43 +836,44 @@
                         type: 'fill',
                         paint: {
                             'fill-color': '#0f6cc9',
-                            'fill-opacity': 0.4,
+                            'fill-opacity': [
+                                'match',
+                                ['get', 'iso_3166_1_alpha_3'],
+                                'TUR', 0.2,
+                                'SYR', 0.2,
+                                ...countriesToShowTwo.filter(code => !specialCountries.includes(code)).reduce((acc, code) => [...acc, code, 0.4], []),
+                                0.4 // Default fill opacity for other countries
+                            ]
                         },
                     },
                     'country-label'
                 );
 
-                map.setFilter('country-boundaries', [
+                map.setFilter('country-boundaries-2', [
                     'in',
                     'iso_3166_1_alpha_3',
-                    'ARM',
-                    'AZE',
-                    'BHR',
-                    'CYP',
-                    'GEO',
-                    'IRQ',
-                    'ISR',
-                    'JOR',
-                    'KWT',
-                    'LBN',
-                    'OMN',
-                    'PSE',
-                    'QAT',
-                    'SAU',
-                    'SYR',
-                    'TUR',
-                    'ARE',
-                    'YEM'
+                    ...countriesToShowTwo
                 ]);
+            }
+            console.log('countriesToShowTwo', countriesToShowTwo)
+        }
+
+        function hideSecondHighlight() {
+            if (map.getLayer('country-boundaries-2')) {
+                map.setFilter('country-boundaries-2', ['in', 'iso_3166_1_alpha_3', '']);
             }
         }
 
-
-        // Callback function to highlight the area
         function thirdHighlight() {
-            if (map.getLayer('country-boundaries')) {
-                map.setFilter('country-boundaries', ['in', 'iso_3166_1_alpha_3', '']);
+            if (map.getLayer('country-boundaries-1')) {
+                map.removeLayer('country-boundaries-1');
+                map.removeSource('country-boundaries-1');
             }
+
+            if (map.getLayer('highlight-tur-syr-1')) {
+                map.removeLayer('highlight-tur-syr-1');
+            }
+
             // Define the area from the Jordan River to the Mediterranean Sea
             var riverToSea = {
                 'type': 'Feature',
@@ -805,7 +914,7 @@
                 'source': 'river-to-sea',
                 'layout': {},
                 'paint': {
-                    'line-color': '#000',
+                    'line-color': '#535353',
                     'line-width': 2
                 }
             });
@@ -843,7 +952,7 @@
             });
 
             map.addLayer({
-                'id': 'labels-layer',
+                'id': 'labels-layer-1',
                 'type': 'symbol',
                 'source': 'labels',
                 'layout': {
@@ -860,68 +969,127 @@
             });
         }
 
-        function fourthHighlight() {
-            map.setLayoutProperty('river-to-sea-layer', 'visibility', 'none');
-            map.setLayoutProperty('outline', 'visibility', 'none');
-            map.setLayoutProperty('labels-layer', 'visibility', 'none');
+        function hidethirdHighlight() {
 
-            if (map.getLayer('country-boundaries')) {
-                map.setFilter('country-boundaries', [
-                    'in',
-                    'iso_3166_1_alpha_3',
-                    'JOR',
-                    'LBN',
-                    'SYR',
-                    'EGY'
-                ]);
-            } else {
-                map.addLayer(
-                    {
-                        id: 'country-boundaries',
-                        source: {
-                            type: 'vector',
-                            url: 'mapbox://mapbox.country-boundaries-v1',
-                        },
-                        'source-layer': 'country_boundaries',
-                        type: 'fill',
-                        paint: {
-                            'fill-color': '#0f6cc9',
-                            'fill-opacity': 0.4,
-                        },
-                    },
-                    'country-label'
-                );
+            if (map.getLayer('outline')) {
+                map.removeLayer('outline');
+            }
+            if (map.getLayer('labels-layer-1')) {
+                map.removeLayer('labels-layer');
+            }
 
-                map.setFilter('country-boundaries', [
-                    'in',
-                    'iso_3166_1_alpha_3',
-                    'JOR',
-                    'LBN',
-                    'SYR',
-                    'EGY'
-                ]);
+            if (map.getSource('labels')) {
+                map.removeSource('labels');
             }
         }
 
-        // function hideSecondHighlight() {
-        //     if (map.getLayer('country-boundaries')) {
-        //         map.setFilter('country-boundaries', ['in', 'iso_3166_1_alpha_3', '']);
-        //     }
-        // }
+        function fourthHighlight() {
 
-
-        // function hidethirdHighlight() {
-        //     map.setLayoutProperty('river-to-sea-layer', 'visibility', 'none');
-        //     map.setLayoutProperty('outline', 'visibility', 'none');
-        //     map.setLayoutProperty('labels-layer', 'visibility', 'none');
-        // }
-
-        if (record.description) {
-            var description = document.createElement('p');
-            description.classList.add('description-text');
-            description.innerHTML = record.description;
-            chapter.appendChild(description);
         }
+        // Remove previous layers and sources if they exist
+        // if (map.getLayer('country-boundaries-2')) {
+        //     map.removeLayer('country-boundaries-2');
+        //     map.removeSource('country-boundaries-2');
+        // }
+
+        // if (map.getLayer('highlight-tur-syr-1')) {
+        //     map.removeLayer('highlight-tur-syr-1');
+        // }
+
+        // Define the countries to highlight
+        // const countriesToShow = [
+        //     'JOR', 'LBN', 'ISR', 'SYR', 'PSE', 'EGY'
+        // ];
+
+        // const specialCountry = 'SYR';
+
+        // if (map.getLayer('country-boundaries-3')) {
+        //     // Update the filter and paint properties if the layer already exists
+        //     map.setFilter('country-boundaries-3', [
+        //         'in',
+        //         'iso_3166_1_alpha_3',
+        //         ...countriesToShow
+        //     ]);
+
+        //     map.setPaintProperty('country-boundaries-3', 'fill-opacity', [
+        //         'match',
+        //         ['get', 'iso_3166_1_alpha_3'],
+        //         specialCountry, 0.2, // Special fill opacity for Syria
+        //         0.4 // Default fill opacity for other countries
+        //     ]);
+        // } else {
+        //     // Add the layer if it doesn't exist
+        //     map.addLayer(
+        //         {
+        //             id: 'country-boundaries-3',
+        //             source: {
+        //                 type: 'vector',
+        //                 url: 'mapbox://mapbox.country-boundaries-v1',
+        //             },
+        //             'source-layer': 'country_boundaries',
+        //             type: 'fill',
+        //             paint: {
+        //                 'fill-color': '#0f6cc9',
+        //                 'fill-opacity': [
+        //                     'match',
+        //                     ['get', 'iso_3166_1_alpha_3'],
+        //                     specialCountry, 0.2, // Special fill opacity for Syria
+        //                     0.4 // Default fill opacity for other countries
+        //                 ]
+        //             },
+        //         },
+        //         'country-label'
+        //     );
+
+        //     map.setFilter('country-boundaries-3', [
+        //         'in',
+        //         'iso_3166_1_alpha_3',
+        //         ...countriesToShow
+        //     ]);
+        // }
+
+        // Add a label for "From the River to the Sea"
+        // var label = {
+        //     'type': 'Feature',
+        //     'geometry': {
+        //         'type': 'Point',
+        //         'coordinates': [35.5, 31.5] // Approximate center of the area referred to as "From the River to the Sea"
+        //     },
+        //     'properties': {
+        //         'title': 'From the River to the Sea'
+        //     }
+        // };
+
+        // // Add the label as a source
+        // map.addSource('label-source', {
+        //     'type': 'geojson',
+        //     'data': {
+        //         'type': 'FeatureCollection',
+        //         'features': [label]
+        //     }
+        // });
+
+        // // Add a layer to display the label
+        // map.addLayer({
+        //     'id': 'label-layer-2',
+        //     'type': 'symbol',
+        //     'source': 'label-source',
+        //     'layout': {
+        //         'text-field': ['get', 'title'],
+        //         'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        //         'text-size': 20,
+        //         'text-anchor': 'top'
+        //     },
+        //     'paint': {
+        //         'text-color': '#ffffff',
+        //         'text-halo-color': '#000000',
+        //         'text-halo-width': 2
+        //     }
+        // });
+
+
+
+
 
     </script>
 
